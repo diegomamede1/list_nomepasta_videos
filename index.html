@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Panda Video — Listar Vídeos e Pastas</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+      padding: 32px 16px;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+
+    .subtitle {
+      color: #888;
+      font-size: 0.875rem;
+      margin-bottom: 32px;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 8px;
+      color: #e0e0e0;
+      font-size: 0.875rem;
+      padding: 10px 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus { border-color: #f05a28; }
+
+    button {
+      background: #f05a28;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 10px 22px;
+      transition: background 0.15s;
+      white-space: nowrap;
+    }
+
+    button:hover { background: #d94e20; }
+    button:disabled { background: #555; cursor: not-allowed; }
+
+    .status {
+      font-size: 0.8rem;
+      color: #888;
+      margin-bottom: 16px;
+      min-height: 18px;
+    }
+
+    .error { color: #f87171; }
+
+    /* Stats bar */
+    .stats {
+      display: flex;
+      gap: 24px;
+      margin-bottom: 24px;
+    }
+
+    .stat {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      padding: 12px 18px;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #f05a28;
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 2px;
+    }
+
+    /* Results */
+    .results { display: flex; flex-direction: column; gap: 28px; }
+
+    .folder-header {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .folder-name {
+      font-weight: 700;
+      font-size: 1rem;
+      color: #fff;
+    }
+
+    .folder-id {
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #f05a28;
+    }
+
+    .video-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding-left: 12px;
+      border-left: 2px solid #2a2a2a;
+    }
+
+    .video-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+
+    .video-id {
+      font-family: monospace;
+      color: #aaa;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Panda Video — Vídeos e Pastas</h1>
+    <p class="subtitle">Insira sua API key para listar todos os vídeos e pastas da sua conta.</p>
+
+    <div class="form-row">
+      <input type="text" id="apiKey" placeholder="Sua API key da Panda Video..." />
+      <button id="btnBuscar" onclick="buscar()">Buscar</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="stats" id="stats" style="display:none">
+      <div class="stat">
+        <div class="stat-value" id="totalVideos">0</div>
+        <div class="stat-label">Vídeos</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="totalPastas">0</div>
+        <div class="stat-label">Pastas</div>
+      </div>
+    </div>
+    <div class="results" id="results"></div>
+  </div>
+
+  <script>
+    const BASE = 'https://api-v2.pandavideo.com.br';
+
+    function setStatus(msg, isError = false) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = isError ? 'status error' : 'status';
+    }
+
+    async function fetchAll(apiKey, path, params = {}) {
+      const todos = [];
+      let page = 1;
+      const limit = 100;
+
+      while (true) {
+        const url = new URL(BASE + path);
+        url.searchParams.set('page', page);
+        url.searchParams.set('limit', limit);
+        Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+
+        const res = await fetch(url, {
+          headers: { Authorization: apiKey }
+        });
+
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(`HTTP ${res.status}: ${txt}`);
+        }
+
+        const data = await res.json();
+
+        // suporte a diferentes formatos de resposta
+        const items = Array.isArray(data) ? data
+          : data.videos ?? data.folders ?? data.data ?? data.items ?? [];
+
+        todos.push(...items);
+
+        const total = data.total ?? data.count ?? null;
+        if (total !== null && todos.length >= total) break;
+        if (items.length < limit) break;
+        page++;
+      }
+
+      return todos;
+    }
+
+    function renderFolderCard(folderId, folderName, videos) {
+      const block = document.createElement('div');
+      block.className = 'folder-block';
+
+      const isRoot = folderId === '__root__';
+      const idSpan = isRoot
+        ? ''
+        : `<span class="folder-id">${escHtml(folderId)}</span>`;
+
+      block.innerHTML = `
+        <div class="folder-header">
+          <span class="folder-name">${escHtml(folderName)}</span>
+          ${idSpan}
+        </div>
+        <div class="video-list">
+          ${videos.map(v => `
+            <div class="video-item">
+              <span class="video-id">${escHtml(v.id)}</span>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+      return block;
+    }
+
+    function escHtml(str) {
+      return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    async function buscar() {
+      const apiKey = document.getElementById('apiKey').value.trim();
+      if (!apiKey) { setStatus('Informe a API key.', true); return; }
+
+      const btn = document.getElementById('btnBuscar');
+      btn.disabled = true;
+      document.getElementById('results').innerHTML = '';
+      document.getElementById('stats').style.display = 'none';
+
+      try {
+        setStatus('Buscando vídeos...');
+        const videos = await fetchAll(apiKey, '/videos');
+
+        setStatus(`${videos.length} vídeo(s) encontrado(s). Buscando pastas...`);
+
+        if (videos.length > 0) console.log('[panda] primeiro vídeo:', videos[0]);
+
+        // Agrupa vídeos por pasta e extrai nomes direto dos objetos de vídeo
+        let folderMap = {}; // id -> name
+        const groups = {};
+
+        for (const v of videos) {
+          const fid = v.folder_id ?? '__root__';
+          if (!groups[fid]) groups[fid] = [];
+          groups[fid].push(v);
+
+          // extrai nome da pasta de qualquer campo que a API traga
+          if (fid !== '__root__' && !folderMap[fid]) {
+            folderMap[fid] =
+              v.folder_name ??
+              v.folder?.name ??
+              v.folder?.title ??
+              v.folder?.folder_name ??
+              null;
+          }
+        }
+
+        // Busca nomes das pastas no endpoint dedicado
+        try {
+          const res = await fetch('https://api-v2.pandavideo.com/folders', {
+            headers: { Authorization: apiKey }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            const pastas = Array.isArray(data) ? data : data.folders ?? data.data ?? data.items ?? [];
+            pastas.forEach(f => {
+              folderMap[f.id] = f.name ?? f.title ?? folderMap[f.id] ?? f.id;
+            });
+          }
+        } catch {
+          // segue com o que temos
+        }
+
+        // Último recurso: usa o próprio id como nome quando ainda não há nome
+        for (const fid of Object.keys(groups)) {
+          if (fid !== '__root__' && !folderMap[fid]) {
+            folderMap[fid] = fid;
+          }
+        }
+
+        const resultsEl = document.getElementById('results');
+        const folderIds = Object.keys(groups).filter(f => f !== '__root__').sort((a, b) =>
+          (folderMap[a] ?? a).localeCompare(folderMap[b] ?? b)
+        );
+
+        // Pastas com vídeos
+        for (const fid of folderIds) {
+          resultsEl.appendChild(renderFolderCard(fid, folderMap[fid] ?? fid, groups[fid]));
+        }
+
+        // Sem pasta
+        if (groups['__root__']) {
+          resultsEl.appendChild(renderFolderCard('__root__', 'Sem pasta', groups['__root__']));
+        }
+
+        const totalPastas = folderIds.length;
+        document.getElementById('totalVideos').textContent = videos.length;
+        document.getElementById('totalPastas').textContent = totalPastas;
+        document.getElementById('stats').style.display = 'flex';
+
+        setStatus(`Concluído — ${videos.length} vídeo(s) em ${totalPastas} pasta(s).`);
+      } catch (err) {
+        setStatus('Erro: ' + err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('apiKey').addEventListener('keydown', e => {
+      if (e.key === 'Enter') buscar();
+    });
+  </script>
+</body>
+</html>
