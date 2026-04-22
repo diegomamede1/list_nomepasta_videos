@@ -48,24 +48,30 @@ function escHtml(str) {
   return String(str ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function toGB(bytes) {
+  if (!bytes) return '0 GB';
+  return (bytes / 1073741824).toFixed(2) + ' GB';
+}
+
 function renderFolderCard(folderId, folderName, videos) {
   const block = document.createElement('div');
   block.className = 'folder-block';
 
   const isRoot = folderId === '__root__';
-  const idSpan = isRoot
-    ? ''
-    : `<span class="folder-id">${escHtml(folderId)}</span>`;
+  const idSpan = isRoot ? '' : `<span class="folder-id">${escHtml(folderId)}</span>`;
+  const totalBytes = videos.reduce((acc, v) => acc + (v.storage_size ?? 0), 0);
 
   block.innerHTML = `
     <div class="folder-header">
       <span class="folder-name">${escHtml(folderName)}</span>
       ${idSpan}
+      <span class="folder-size">${toGB(totalBytes)}</span>
     </div>
     <div class="video-list">
       ${videos.map(v => `
         <div class="video-item">
           <span class="video-id">${escHtml(v.id)}</span>
+          <span class="video-size">${toGB(v.storage_size)}</span>
         </div>
       `).join('')}
     </div>
@@ -87,7 +93,7 @@ async function buscar() {
 
   try {
     setStatus('Buscando vídeos...');
-    const videos = await fetchAll(apiKey, '/videos');
+    const videos = await fetchAll(apiKey, '/videos', { storage_size: true });
 
     setStatus(`${videos.length} vídeo(s) encontrado(s). Buscando pastas...`);
 
@@ -140,7 +146,7 @@ async function buscar() {
       const name = fid === '__root__' ? 'Sem pasta' : (folderMap[fid] ?? fid);
       resultsEl.appendChild(renderFolderCard(fid, name, groups[fid]));
       for (const v of groups[fid]) {
-        dadosExport.push({ folderId: fid === '__root__' ? '' : fid, folderName: name, videoId: v.id });
+        dadosExport.push({ folderId: fid === '__root__' ? '' : fid, folderName: name, videoId: v.id, videoSize: parseFloat((( v.storage_size ?? 0) / 1073741824).toFixed(2)) });
       }
     }
 
@@ -161,9 +167,9 @@ async function buscar() {
 function exportarExcel() {
   if (!dadosExport.length) return;
 
-  const rows = [['Pasta ID', 'Pasta Nome', 'Video ID']];
-  for (const { folderId, folderName, videoId } of dadosExport) {
-    rows.push([folderId, folderName, videoId]);
+  const rows = [['Pasta ID', 'Pasta Nome', 'Video ID', 'Tamanho (GB)']];
+  for (const { folderId, folderName, videoId, videoSize } of dadosExport) {
+    rows.push([folderId, folderName, videoId, videoSize]);
   }
 
   const ws = XLSX.utils.aoa_to_sheet(rows);
