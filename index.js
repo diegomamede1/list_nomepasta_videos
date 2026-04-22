@@ -151,8 +151,12 @@ async function buscar() {
     }
 
     const totalPastas = folderIds.length;
+    const totalBytes = videos.reduce((acc, v) => acc + (v.storage_size ?? 0), 0);
+    const totalTB = (totalBytes / 1099511627776).toFixed(3);
+
     document.getElementById('totalVideos').textContent = videos.length;
     document.getElementById('totalPastas').textContent = totalPastas;
+    document.getElementById('totalStorage').textContent = totalTB + ' TB';
     document.getElementById('stats').style.display = 'flex';
     document.getElementById('btnExportWrapper').style.display = 'block';
 
