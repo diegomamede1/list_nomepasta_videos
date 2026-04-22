@@ -1,5 +1,7 @@
 const BASE = 'https://api-v2.pandavideo.com.br';
 
+let dadosExport = [];
+
 function setStatus(msg, isError = false) {
   const el = document.getElementById('status');
   el.textContent = msg;
@@ -80,6 +82,8 @@ async function buscar() {
   btn.disabled = true;
   document.getElementById('results').innerHTML = '';
   document.getElementById('stats').style.display = 'none';
+  document.getElementById('btnExportWrapper').style.display = 'none';
+  dadosExport = [];
 
   try {
     setStatus('Buscando vídeos...');
@@ -131,18 +135,20 @@ async function buscar() {
       (folderMap[a] ?? a).localeCompare(folderMap[b] ?? b)
     );
 
-    for (const fid of folderIds) {
-      resultsEl.appendChild(renderFolderCard(fid, folderMap[fid] ?? fid, groups[fid]));
-    }
-
-    if (groups['__root__']) {
-      resultsEl.appendChild(renderFolderCard('__root__', 'Sem pasta', groups['__root__']));
+    const allGroups = [...folderIds, ...(groups['__root__'] ? ['__root__'] : [])];
+    for (const fid of allGroups) {
+      const name = fid === '__root__' ? 'Sem pasta' : (folderMap[fid] ?? fid);
+      resultsEl.appendChild(renderFolderCard(fid, name, groups[fid]));
+      for (const v of groups[fid]) {
+        dadosExport.push({ folderId: fid === '__root__' ? '' : fid, folderName: name, videoId: v.id });
+      }
     }
 
     const totalPastas = folderIds.length;
     document.getElementById('totalVideos').textContent = videos.length;
     document.getElementById('totalPastas').textContent = totalPastas;
     document.getElementById('stats').style.display = 'flex';
+    document.getElementById('btnExportWrapper').style.display = 'block';
 
     setStatus(`Concluído — ${videos.length} vídeo(s) em ${totalPastas} pasta(s).`);
   } catch (err) {
@@ -150,6 +156,20 @@ async function buscar() {
   } finally {
     btn.disabled = false;
   }
+}
+
+function exportarExcel() {
+  if (!dadosExport.length) return;
+
+  const rows = [['Pasta ID', 'Pasta Nome', 'Video ID']];
+  for (const { folderId, folderName, videoId } of dadosExport) {
+    rows.push([folderId, folderName, videoId]);
+  }
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Videos');
+  XLSX.writeFile(wb, 'panda_videos.xlsx');
 }
 
 document.getElementById('apiKey').addEventListener('keydown', e => {
