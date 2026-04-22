@@ -93,7 +93,7 @@ async function buscar() {
 
   try {
     setStatus('Buscando vídeos...');
-    const videos = await fetchAll(apiKey, '/videos', { storage_size: true });
+    const videos = await fetchAll(apiKey, '/videos');
 
     setStatus(`${videos.length} vídeo(s) encontrado(s). Buscando pastas...`);
 
